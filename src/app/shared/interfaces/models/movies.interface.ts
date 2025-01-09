@@ -4,7 +4,7 @@ export interface MoviesData {
     total_pages: number
     total_results: number
   }
-  
+
   export interface MovieResult {
     adult: boolean
     backdrop_path: string

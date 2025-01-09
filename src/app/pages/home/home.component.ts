@@ -21,139 +21,89 @@ import { Router } from '@angular/router';
 export class HomeComponent implements OnInit {
   title: string = 'All';
   movieCards: MovieCardConfig[] = [];
-  segments: SegmentedControlConfig[] = [{
-    name: 'All',
-    active: true
-  },
-  {
-    name: 'Movies',
-    active: false
-  },
-  {
-    name: 'TV Shows',
-    active: false,
+  segments: SegmentedControlConfig[] = [
+    { name: 'All', active: true },
+    { name: 'Movies', active: false },
+    { name: 'TV Shows', active: false }
+  ];
 
-  }]
-  constructor(private _movieService: MovieService,
-    private router: Router) { }
+  constructor(private movieService: MovieService, private router: Router) { }
+
   ngOnInit(): void {
-    this.segments.map((item: SegmentedControlConfig) => {
-      item.onClick = () => {
-        this.title = item.name;
-        if (item.name.toLowerCase().includes('movie')) {
+    this.initializeSegments();
+    this.getAllTrending();
+  }
+
+  initializeSegments(): void {
+    this.segments.forEach(segment => {
+      segment.onClick = () => {
+        this.title = segment.name;
+        if (segment.name === 'Movies') {
           this.getMovies();
-        } else if (item.name.toLowerCase().includes('tv shows')) {
+        } else if (segment.name === 'TV Shows') {
           this.getTVShows();
         } else {
           this.getAllTrending();
         }
-      }
-    })
-    this.getAllTrending()
+      };
+    });
   }
 
-  getAllTrending() {
-    this._movieService.httpGet(Endpoints.TRENDS)
-      .subscribe({
-        next: (res: TrendData) => {
-          console.log(res.results);
-
-          this.movieCards = res.results.map((item: TrendsResult) => {
-            return {
-              img: Endpoints.IMAGE_BASE + `/w500${item.backdrop_path}`,
-              movieName: item.original_title || item.original_name,
-              rate: item.vote_average,
-              onClick: () => {
-
-                if (item.first_air_date) {
-                  this.router.navigateByUrl(`tvshows/${item.id}`)
-                } else {
-                  this.router.navigateByUrl(`movie/${item.id}`)
-
-                }
-
-              }
-            } as MovieCardConfig
-          }).filter((item => item.movieName))
-        },
-        error: (error: any) => {
-          console.error(error)
-        }
-      })
-  }
-  getTVShows() {
-    this._movieService.httpGet(Endpoints.TV_SHOWS)
-      .subscribe({
-        next: (res: TVData) => {
-
-          this.movieCards = res.results.map((item: TVResult) => {
-            return {
-              img: Endpoints.IMAGE_BASE + `/w500${item.backdrop_path}`,
-              movieName: item.original_name,
-              rate: item.vote_average,
-              onClick: () => {
-                console.log("Click : ", item)
-
-                this.router.navigateByUrl(`tvshow/${item.id}`)
-
-
-              }
-            } as MovieCardConfig
-          }).filter((item => item.movieName))
-        },
-        error: (error: any) => {
-          console.error(error)
-        }
-      })
+  getAllTrending(): void {
+    this.fetchData(Endpoints.TRENDS, item => ({
+      img: `${Endpoints.IMAGE_BASE}/w500${item.backdrop_path}`,
+      movieName: item.original_title || item.original_name,
+      rate: item.vote_average,
+      onClick: () => this.navigateToDetail(item)
+    }));
   }
 
-  getMovies() {
-    this._movieService.httpGet(Endpoints.MOVIES)
-      .subscribe({
-        next: (res: MoviesData) => {
-
-          this.movieCards = res.results.map((item: MovieResult) => {
-            return {
-              img: Endpoints.IMAGE_BASE + `/w500${item.backdrop_path}`,
-              movieName: item.original_title,
-              rate: item.vote_average,
-              onClick: () => {
-
-                this.router.navigateByUrl(`movie/${item.id}`)
-
-
-              }
-            } as MovieCardConfig
-          }).filter((item => item.movieName))
-        },
-        error: (error: any) => {
-          console.error(error)
-        }
-      })
+  getMovies(): void {
+    this.fetchData(Endpoints.MOVIES, item => ({
+      img: `${Endpoints.IMAGE_BASE}/w500${item.backdrop_path}`,
+      movieName: item.original_title,
+      rate: item.vote_average,
+      onClick: () => this.router.navigateByUrl(`movie/${item.id}`)
+    }));
   }
 
-  search(e: any): void {
-    this._movieService.searchMovies(e.target.value)
-    .subscribe({
-      next: (res: MoviesData) => {
+  getTVShows(): void {
+    this.fetchData(Endpoints.TV_SHOWS, item => ({
+      img: `${Endpoints.IMAGE_BASE}/w500${item.backdrop_path}`,
+      movieName: item.original_name,
+      rate: item.vote_average,
+      onClick: () => this.router.navigateByUrl(`tvshow/${item.id}`)
+    }));
+  }
 
-        this.movieCards = res.results.map((item: MovieResult) => {
-          return {
-            img: Endpoints.IMAGE_BASE + `/w500${item.backdrop_path}`,
-            movieName: item.original_title,
-            rate: item.vote_average,
-            onClick: () => {
+  search(event: any): void {
+    const query = event.target.value;
+    this.movieService.searchMovies(query).subscribe(
+      res => this.updateMovieCards(res.results, item => ({
+        img: `${Endpoints.IMAGE_BASE}/w500${item.backdrop_path}`,
+        movieName: item.original_title,
+        rate: item.vote_average,
+        onClick: () => this.router.navigateByUrl(`movie/${item.id}`)
+      })),
+      error => console.error(error)
+    );
+  }
 
-              this.router.navigateByUrl(`movie/${item.id}`)
+  private fetchData(endpoint: string, mapFn: (item: any) => MovieCardConfig): void {
+    this.movieService.httpGet(endpoint).subscribe(
+      res => this.updateMovieCards(res.results, mapFn),
+      error => console.error(error)
+    );
+  }
 
+  private updateMovieCards(items: any[], mapFn: (item: any) => MovieCardConfig): void {
+    this.movieCards = items
+      .map(mapFn)
+      .filter(item => item.movieName);
+  }
 
-            }
-          } as MovieCardConfig
-        }).filter((item => item.movieName))
-      },
-      error: (error: any) => {
-        console.error(error)
-      }
-    })
+  private navigateToDetail(item: TrendsResult): void {
+    const route = item.first_air_date ? `tvshow/${item.id}` : `movie/${item.id}`;
+    this.router.navigateByUrl(route);
   }
 }
